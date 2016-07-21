@@ -14,8 +14,8 @@ import (
 type Configuration struct {
 	Listen      string `config:"tcp://:8080"`
 	Host        string `config:"localhost:8080"`
-	Path        string `config:"path"`
-	Secret      string `config:"secret"`
+	Path        string `config:""`
+	Secret      string `config:""`
 	MetaDB      string `config:"lfs.db"`
 	ContentPath string `config:"lfs-content"`
 	AdminUser   string `config:""`

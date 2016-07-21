@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,15 +29,45 @@ type Config struct {
 	HRef   string `json:"href,omitempty"`
 }
 
-func main() {
-	if len(os.Args) < 3 || len(os.Args) > 4 {
-		fmt.Fprintf(os.Stderr, "Usage: git-lfs-authenticate <repo> <operation> [oid]\n")
-		os.Exit(1)
+func checkAccess(repo, user, perm string) (bool, error) {
+	if strings.HasSuffix(repo, ".git") {
+		repo = repo[:len(repo)-4]
 	}
 
 	gitolitePath, err := exec.LookPath("gitolite")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error: failed to find gitolite command:", err)
+	if err == nil {
+		err := exec.Command(gitolitePath, "access", "-q", repo, user, perm).Run()
+		if _, ok := err.(*exec.ExitError); ok {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	// Fallback for gitolite v2
+	perlPath, err := exec.LookPath("perl")
+	bindDir := strings.TrimSpace(os.Getenv("GL_BINDIR"))
+	if err == nil && bindDir != "" {
+		out, err := exec.Command(perlPath, fmt.Sprintf("-I%s", bindDir), "-Mgitolite", "-e",
+			fmt.Sprintf("cli_repo_rights(%q)", repo)).Output()
+		if err != nil {
+			return false, err
+		}
+		i := bytes.IndexByte(out, ' ')
+		if i < 0 {
+			return false, errors.New("invalid output from cli_repo_rights")
+		}
+		acl := string(out[:i])
+		return strings.Contains(acl, perm), nil
+	}
+
+	return false, errors.New("failed to check ACL (no gitolite command or GL_BINDDIR)")
+}
+
+func main() {
+	if len(os.Args) < 3 || len(os.Args) > 4 {
+		fmt.Fprintf(os.Stderr, "Usage: git-lfs-authenticate <repo> <operation> [oid]\n")
 		os.Exit(1)
 	}
 
@@ -88,12 +119,14 @@ func main() {
 	if operation == "upload" {
 		perm = "W"
 	}
-	err = exec.Command(gitolitePath, "access", "-q", repo, user, perm).Run()
-	if _, ok := err.(*exec.ExitError); ok {
-		fmt.Fprintln(os.Stderr, "Error: LFS access denied!")
+
+	allowed, err := checkAccess(repo, user, perm)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: failed to find gitolite command:", err)
 		os.Exit(1)
-	} else if err != nil {
-		fmt.Fprintln(os.Stderr, "Error: failed to check access:", err)
+	}
+	if !allowed {
+		fmt.Fprintln(os.Stderr, "Error: Access denied!")
 		os.Exit(1)
 	}
 
@@ -112,8 +145,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error: failed to sign token:", err)
 		os.Exit(1)
 	}
-
-	_ = tokenString
 
 	resp := Response{
 		Header: map[string]string{
