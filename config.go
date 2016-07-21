@@ -13,6 +13,7 @@ import (
 type Configuration struct {
 	Listen      string `config:"tcp://:8080"`
 	Host        string `config:"localhost:8080"`
+	Path        string `config:"path"`
 	MetaDB      string `config:"lfs.db"`
 	ContentPath string `config:"lfs-content"`
 	AdminUser   string `config:""`
@@ -43,6 +44,14 @@ func (c *Configuration) IsUsingTus() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Configuration) BasePath() string {
+	base := strings.Trim(c.Path, "/")
+	if base == "" {
+		return ""
+	}
+	return fmt.Sprintf("/%s", base)
 }
 
 // Config is the global app configuration

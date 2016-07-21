@@ -72,7 +72,7 @@ func (v *RequestVars) UploadLink(useTus bool) string {
 }
 
 func (v *RequestVars) internalLink(subpath string) string {
-	path := ""
+	path := Config.BasePath()
 
 	if len(v.User) > 0 {
 		path += fmt.Sprintf("/%s", v.User)
@@ -100,7 +100,8 @@ func (v *RequestVars) tusLink() string {
 }
 
 func (v *RequestVars) VerifyLink() string {
-	path := fmt.Sprintf("/verify/%s", v.Oid)
+	path := Config.BasePath()
+	path += fmt.Sprintf("/verify/%s", v.Oid)
 
 	if Config.IsHTTPS() {
 		return fmt.Sprintf("%s://%s%s", Config.Scheme, Config.Host, path)
@@ -155,6 +156,15 @@ func NewApp(content *ContentStore, meta *MetaStore) *App {
 }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if prefix := Config.BasePath(); prefix != "" {
+		if p := strings.TrimPrefix(r.URL.Path, prefix); len(p) < len(r.URL.Path) {
+			r.URL.Path = p
+		} else {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err == nil {
