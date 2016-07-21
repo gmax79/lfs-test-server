@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"reflect"
@@ -14,6 +15,7 @@ type Configuration struct {
 	Listen      string `config:"tcp://:8080"`
 	Host        string `config:"localhost:8080"`
 	Path        string `config:"path"`
+	Secret      string `config:"secret"`
 	MetaDB      string `config:"lfs.db"`
 	ContentPath string `config:"lfs-content"`
 	AdminUser   string `config:""`
@@ -44,6 +46,10 @@ func (c *Configuration) IsUsingTus() bool {
 		return true
 	}
 	return false
+}
+
+func (c *Configuration) DecodeSecret() ([]byte, error) {
+	return base64.StdEncoding.DecodeString(c.Secret)
 }
 
 func (c *Configuration) BasePath() string {
